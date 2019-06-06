@@ -20,18 +20,10 @@ import serial
 import serial.tools.list_ports
 import threading
 
-# Qt imports
-#import PyQt5
-#from PyQt5 import QtCore, QtGui
-#from PyQt5.QtWebKit import QWebView #try taking out
-#from PyQt5 import QtWidgets #new
-#from PyQt5.QtWebEngineWidgets import QWebEngineView,QWebEnginePage as QWebView #new test#
-#from PyQt5.QtCore import *
-#from PyQt5.QtGui import *
-
 from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtWebEngineWidgets import QWebEngineView,QWebEnginePage as QWebView
-#import PySide2.QtWebEngineWidgets
+from PySide2.QtWidgets import *
+from PySide2.QtCore import Signal as pyqtSignal
+from PySide2.QtWebEngineWidgets import QWebEngineView as QWebView
 
 # Scientific libraries
 import math
@@ -45,32 +37,38 @@ import base64					   # = encodes an image in b64 Strings (and decodes)
 import hashlib					  # = generates hashes
 
 # Imports from files
-from ui_trackermain import Ui_MainWindow  # UI file import
+from ui_trackermain import Ui_MainWindow        # UI file import
 from ServoController import *			# Module for controlling Mini Maestro
 from StillImageSystem import *			# RFD based Still Image system
-from PointingMath import *				# Functions for calculating angles and distances
-from RfdControls import *				# RFD commands and listen
-from BalloonUpdate import *				# Class to hold balloon info
-from GetData import *					# Module for tracking methods
-from Payloads import *					# Module for handling payloads
-from MapHTML import *						# Module for generating Google Maps HTML and JavaScript
+from PointingMath import *			# Functions for calculating angles and distances
+from RfdControls import *			# RFD commands and listen
+from BalloonUpdate import *			# Class to hold balloon info
+from GetData import *				# Module for tracking methods
+from Payloads import *				# Module for handling payloads
+from MapHTML import *				# Module for generating Google Maps HTML and JavaScript
 from CommandEmailer import *
+from pyside_init_window import *                # initialization window made with pyside
 
 # Matplotlib setup
-from matplotlib.figure import Figure
+#matplotlib.use('Qt5Agg')
+#from matplotlib.backends.backend_qt4agg import (
+#        FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-matplotlib.use('Qt5Agg')
-#matplotlib.rcParams['backend.qt5'] = 'PyQt5'
+from matplotlib.figure import Figure
+
+#from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
+#matplotlib.use('Qt4Agg')
+#matplotlib.rcParams['backend.qt5'] = 'Pyside'
+#matplotlib.rcParams['Qt5Agg'] = 'PyQt5'
 ##matplotlib.rcParams['backend.qt4'] = 'PyQt4'
 
 # https://developers.google.com/maps/documentation/javascript/get-api-key
 googleMapsApiKey = ''
 
-
 class EventThread(QThread):
     def run(self):
         self.exec_()
-
 
 class WebView(QWebView):
     """ A class that allows messages from JavaScript being run in a QWebView to be printed """
@@ -121,9 +119,9 @@ class Unbuffered:
     def close(self):
         self.stream.close()
 
-
-class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
+class MainWindow(QMainWindow, Ui_MainWindow):
     """ The Main GUI Window """
+    
     # Signals
     # RFD Command Signals
     commandFinished = pyqtSignal()
@@ -334,22 +332,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tabs.setCurrentIndex(0)
 
         # Graph Setup
-##        self.figure = Figure()
-##        self.canvas = FigureCanvas(self.figure)
-##        #layout = QtGui.QVBoxLayout()
-##        layout = QtWidgets.QVBoxLayout()
+        self.figure = Figure()
+        self.canvas = FigureCanvas(self.figure)
+##        #layout = QVBoxLayout()
+        layout = QVBoxLayout()
 ##        #layout.addWidget(self.canvas)
-##        layout.addWidget(self)
-##        self.graphWidget.setLayout(layout)
-##
-##        # Graphing Arrays
-##        self.receivedTime = np.array([])
-##        self.receivedLat = np.array([])
-##        self.receivedLon = np.array([])
-##        self.receivedAlt = np.array([])
-##        self.losLog = np.array([])
-##        self.elevationLog = np.array([])
-##        self.bearingLog = np.array([])
+        layout.addWidget(self.canvas)
+        self.graphWidget.setLayout(layout)
+
+        # Graphing Arrays
+        self.receivedTime = np.array([])
+        self.receivedLat = np.array([])
+        self.receivedLon = np.array([])
+        self.receivedAlt = np.array([])
+        self.losLog = np.array([])
+        self.elevationLog = np.array([])
+        self.bearingLog = np.array([])
 
         # Determine Serial Connections
         self.searchComPorts()
@@ -452,12 +450,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def updateIncoming(self, row, column, value):
         """ Update the Incoming GPS Data grid with the newest values """
         self.incomingDataTable.setItem(
-            column, row, QtGui.QTableWidgetItem(str(value)))
+            #column, row, QtGui.QTableWidgetItem(str(value)))
+            column, row, QtWidgets.QTableWidgetItem(str(value)))
 
     def updateGround(self, row, column, value):
         """ Update the Ground Station Data grid with the newest values """
         self.groundDataTable.setItem(
-            column, row, QtGui.QTableWidgetItem(str(value)))
+            #column, row, QtGui.QTableWidgetItem(str(value)))
+            column, row, QtWidgets.QTableWidgetItem(str(value)))
 
     def refresh(self, update):
         """ Refreshs the info grids and plots with the newest values """
@@ -566,7 +566,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # Set up the Map View
             if not self.mapMade:
-                self.mapView = WebView()
+                self.mapView = QWebView();
+                #self.mapView = WebView()
                 self.mapView.setHtml(getMapHtml(45, -93, googleMapsApiKey))
                 self.mapViewGridLayout.addWidget(self.mapView)
             self.mapMade = True
@@ -1393,6 +1394,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             obj.setPalette(palette)
         if color == "green":		# Makes the label green
             palette = QtGui.QPalette()
+            print(palette)
             brush = QtGui.QBrush(QtGui.QColor(21, 255, 5))
             brush.setStyle(QtCore.Qt.SolidPattern)
             palette.setBrush(QtGui.QPalette.Active,
@@ -1917,7 +1919,6 @@ if __name__ == "__main__":
 
     with open('api_key') as f:
         googleMapsApiKey = f.readline().strip()
-
     mGui = MainWindow()						# Launch the main window
     mGui.showMaximized()					# Shows the main window maximized
     sys.stdout = Unbuffered(sys.stdout)		# Sets up an unbuffered stream
