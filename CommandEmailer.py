@@ -52,7 +52,7 @@ class CommandEmailer():
         # Builds and sends the email
         command = str(fileOut)
         print("Sendng: %s" % command)
-        fromaddr = "msgc.borealis@gmail.com"
+        fromaddr =  "msgc.borealis@gmail.com"
         toaddr = "data@sbd.iridium.com"
         msg = MIMEMultipart()
         msg['From'] = fromaddr
