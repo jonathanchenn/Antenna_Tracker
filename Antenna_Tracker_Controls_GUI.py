@@ -8,7 +8,7 @@ Software created for use by the National Space Grant Consortium
 Purpose: To acquire the location of a balloon in flight, and aim the array of antennae at the balloon
 Additional Features: RFD 900 based Command Center and Image Reception
 Creation Date: March 2016
-Last Edit Date: August 2, 2017
+Last Edit Date: June 2019
 """
 
 # System imports
