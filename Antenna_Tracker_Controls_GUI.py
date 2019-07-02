@@ -49,6 +49,8 @@ from Payloads import *				# Module for handling payloads
 from MapHTML import *				# Module for generating Google Maps HTML and JavaScript
 from CommandEmailer import *                    # Module for emailing Iridium commands
 from Interpolate import *                       # Module for interpolating balloon pointing updates
+from UbiquitiSignalTracker import *             # Module for adjusting the antenna based on signal strength
+from UbiquitiSignalScraper import *             # Module for scraping the signal strength from the modem
 
 # Matplotlib setup
 #matplotlib.use('Qt5Agg')
@@ -133,12 +135,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     rfdListenNewText = pyqtSignal(str)
     piruntimeFinished = pyqtSignal()
 
-    # RFD Listen Signals
+    # Listen Signals
     rfdNewLocation = pyqtSignal(BalloonUpdate)
     iridiumNewLocation = pyqtSignal(BalloonUpdate)
     iridiumInterpolateNewLocation = pyqtSignal(BalloonUpdate)
+    ubiquitiNewSignalStrength = pyqtSignal(float)
+    ubiquitiTrackerNewPointing = pyqtSignal(float, float)
     aprsNewLocation = pyqtSignal(BalloonUpdate)
     payloadUpdate = pyqtSignal(str)
+    ubiquitiScraperError = pyqtSignal(str)
 
     # Still Image Signals
     stillNewText = pyqtSignal(str)
@@ -175,6 +180,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.aprsThread.daemon = True
         self.iridiumInterpolateThread = EventThread()
         self.iridiumInterpolateThread.daemon = True
+        self.ubiquitiTrackerThread = EventThread()
+        self.ubiquitiTrackerThread.daemon = True
+        self.ubiquitiScraperThread = EventThread()
+        self.ubiquitiScraperThread.daemon = True
         
         # Start the threads, they should run forever, and add them to the
         # thread pool
@@ -183,6 +192,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.stillImageThread.start()
         self.iridiumThread.start()
         self.iridiumInterpolateThread.start()
+        self.ubiquitiTrackerThread.start()
+        self.ubiquitiScraperThread.start()
         self.aprsThread.start()
 
         # Button Function Link Setup
@@ -203,11 +214,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.ManualEntryUpdateButton.clicked.connect(self.manualEntryUpdate)
         self.ManualAngleEntryButton.clicked.connect(
             self.manualAngleEntryUpdate)
-        self.sliderButton.clicked.connect(lambda: self.sliderControl("click"))
-        self.panServoSlider.valueChanged.connect(
-            lambda: self.sliderControl("slide"))
-        self.tiltServoSlider.valueChanged.connect(
-            lambda: self.sliderControl("slide"))
+        #Slider stuff commented out 6/19/2019
+        #self.sliderButton.clicked.connect(lambda: self.sliderControl("click"))
+        #self.panServoSlider.valueChanged.connect(
+        #    lambda: self.sliderControl("slide"))
+        #self.tiltServoSlider.valueChanged.connect(
+        #    lambda: self.sliderControl("slide"))
 
         # Trim Button Links
         self.trimUpButton.clicked.connect(lambda: self.trimControl('up'))
@@ -246,9 +258,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.autoDisabled.toggled.connect(self.disabledChecked)
         # self.autoIridium.stateChanged.connect(self.autotrackChecked)
         self.autoIridium.toggled.connect(self.autotrackChecked)
-
         self.autoIridiumInterpolate.toggled.connect(self.autotrackChecked)
-        self.autoAPRS.stateChanged.connect(self.autotrackChecked)
+        self.autoUbiquitiSignalTrack.toggled.connect(self.autotrackChecked)
+        #self.autoAPRS.stateChanged.connect(self.autotrackChecked)
         self.autoRFD.stateChanged.connect(self.autotrackChecked)
 
         # Initial Still Image System Picture Display Setup
@@ -291,8 +303,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.RFDAttached = False
         self.ardAttached = False
         self.APRSAttached = False
+        self.ubiAttached = False
         self.useIridium = False
         self.useIridiumInterpolate = False
+        self.useUbiquitiSignalTrack = False
         self.useRFD = False
         self.useAPRS = False
         self.autotrackOnline = False
@@ -302,12 +316,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.aprsStarted = False
         self.iridiumStarted = False
         self.iridiumInterpolateStarted = False
+        self.ubiquitiSignalTrackStarted = False
         self.autotrackBlock = False
         self.calibrationReady = False
         self.inSliderMode = False
         self.rfdStarted = False
         self.servosStarted = False
         self.arduinoStarted = False
+        self.ubiquitiSignalScraperStarted = False
 
         # RFD Commands Controls
         self.rfdCommandsOnline = False
@@ -336,8 +352,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.callsign = ""		# For the EAGLE Flight Computer
         self.IMEI = ""			# For the Iridium Modem
 
+        # Ubiquiti Info
+        self.ubiquitiIP = ""
+        self.ubiquitiUser = ""
+        self.ubiquitiPass = ""
+
         self.payloadList = []		# List of payloads in this flight
         self.mapMade = False
+        self.suntableMade = False
 
         self.currentBalloon = BalloonUpdate('', 0, 0, 0, 0, '', 0, 0, 0)
         self.tabs.setCurrentIndex(0)
@@ -358,14 +380,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.elevationLog = np.array([])
         self.bearingLog = np.array([])
 
+        # Ubiquiti Graph Setup
+        self.ubiFigure = Figure()
+        self.ubiCanvas = FigureCanvas(self.ubiFigure)
+        layout = QVBoxLayout()
+        layout.addWidget(self.ubiCanvas)
+        self.ubiquitiSignalStrengthGraph.setLayout(layout)
+        # Ubiquiti Graphing Arrays
+        self.signalStrengthTime = np.array([])
+        self.signalStrength = np.array([])
+        self.ubiGraphColor = 0
+        self.ubiGraphColors = ['r-', 'g-', 'b-', 'y-', 'c-', 'm-', 'k-']
+
         # Determine Serial Connections
         self.searchComPorts()
 
     def iridiumNoConnection(self):
         self.useIridium = False
         self.autoIridium.setChecked(False)
-        if(not self.autoAPRS.isChecked() and not self.autoRFD.isChecked()):
-            self.autoDisabled.setChecked(True)
+        #if(not self.autoAPRS.isChecked() and not self.autoRFD.isChecked()):
+        #    self.autoDisabled.setChecked(True)
         self.createWarning("Unable to Connect to Iridium Database")
         self.iridiumStarted = False
 
@@ -569,6 +603,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def getSettings(self):
         """ Go through the settings tab and update class and global variables with the new settings """
 
+        print() # Readability
+
         # Determine whether or not to save the Data for this flight
         if self.saveDataCheckbox.isChecked():
             if not self.saveData:
@@ -603,6 +639,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.mapView.setHtml(getMapHtml(45, -93, googleMapsApiKey))
                 self.mapViewGridLayout.addWidget(self.mapView)
             self.mapMade = True
+            # Set up the Map View
+            if not self.suntableMade:
+                self.suntableView = QWebView();
+                stUrl = QUrl("https://aa.usno.navy.mil/data/docs/AltAz.php")
+                self.suntableView.load(stUrl)
+                self.suntableViewGridLayout.addWidget(self.suntableView)
+                self.suntableMade = True
         else:
             self.internetAccess = False
 
@@ -611,7 +654,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.servosAttached = self.servoAttached.isChecked()
         self.RFDAttached = self.rfdAttached.isChecked()
         self.ardAttached = self.arduinoAttached.isChecked()
-        self.APRSAttached = self.aprsAttached.isChecked()
+        self.ubiAttached = self.ubiquitiAttached.isChecked()
+        #self.APRSAttached = self.aprsAttached.isChecked()
 
         if self.servoAttached.isChecked():
             if not self.servosStarted:
@@ -690,20 +734,36 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.arduino = SerialDevice(arduinoCOM, 115200, 5)
                     self.arduinoStarted = True
 
-        if self.aprsAttached.isChecked():
-            if self.aprsCallsign.text() == "":				# Get the APRS callsign too, default to placeholder
-                self.callsign = str(self.aprsCallsign.placeholderText())
-            else:
-                self.callsign = self.aprsCallsign.text()
-            if not self.aprsCOM.text() == "":
-                aprsCOM = str(self.aprsCOM.text())
-                self.APRS = SerialDevice(aprsCOM, 9600, 5)
+        #if self.aprsAttached.isChecked():
+        #    if self.aprsCallsign.text() == "":				# Get the APRS callsign too, default to placeholder
+        #        self.callsign = str(self.aprsCallsign.placeholderText())
+        #    else:
+        #        self.callsign = self.aprsCallsign.text()
+        #    if not self.aprsCOM.text() == "":
+        #        aprsCOM = str(self.aprsCOM.text())
+        #        self.APRS = SerialDevice(aprsCOM, 9600, 5)
 
         # Get the IMEI for the iridium modem, default to placeholder
         if self.iridiumIMEI.text() == '':
             self.IMEI = str(self.iridiumIMEI.placeholderText())
         else:
             self.IMEI = str(self.iridiumIMEI.text())
+
+        # Get the IP for the ubiquiti modem, default to placeholder
+        if self.ubiquitiCOM.text() == "":
+            self.ubiquitiIP = self.ubiquitiCOM.placeholderText()
+        else:
+            self.ubiquitiIP = self.ubiquitiCOM.text()
+
+        # Get the Username and Password for the ubiquiti modem, default to placeholder
+        if self.ubiUsername.text() == "":
+            self.ubiquitiUser = self.ubiUsername.placeholderText()
+        else:
+            self.ubiquitiUser = self.ubiUsername.text()
+        if self.ubiPassword.text() == "":
+            self.ubiquitiPass = self.ubiPassword.placeholderText()
+        else:
+            self.ubiquitiPass = self.ubiPassword.text()
 
         # Get the center bearing
         if self.getLocal.isChecked():
@@ -724,9 +784,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.centerBear = 270
             elif self.bearingManual.isChecked():      # Manual Radio Button
                 if self.manualBear.text() == "":
-                    self.centerBear = int(self.manualBear.placeholderText()) #Default to placeholder
+                    self.centerBear = stringToFloat(self.manualBear.placeholderText()) #Default to placeholder
                 else:
-                    self.centerBear = int(self.manualBear.text())
+                    self.centerBear = stringToFloat(self.manualBear.text())
             else:
                 self.centerBear = 0
                 print("Error with manual bearing setup")
@@ -758,7 +818,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Determine which types of tracking are selected
         self.useIridium = self.autoIridium.isChecked()
         self.useIridiumInterpolate = self.autoIridiumInterpolate.isChecked()
-        self.useAPRS = self.autoAPRS.isChecked()
+        self.useUbiquitiSignalTrack = self.autoUbiquitiSignalTrack.isChecked()
+        #self.useAPRS = self.autoAPRS.isChecked()
         self.useRFD = self.autoRFD.isChecked()
         self.useDisabled = self.autoDisabled.isChecked()
 
@@ -850,8 +911,39 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             else:
                 self.interpolateIridium.setPredictionUpdateSpeed.emit(float(self.iridiumPredictionUpdateSpeed.text()))
 ##--------------------------------------------------------------------------------------------------------------------
-        
-        if self.autoIridium.isChecked() or self.autoAPRS.isChecked() or self.autoRFD.isChecked():
+
+##SIGNAL SCRAPER TRACKING---------------------------------------------------------------------------------------------
+        if self.useUbiquitiSignalTrack and not self.ubiquitiSignalTrackStarted:  # Don't start it up again if it's already going
+            if self.ubiAttached:
+                print("Starting Ubiquiti Signal Tracking")
+                self.ubiquitiSignalTracker = UbiquitiSignalTracker(self, self.ubiquitiIP, self.ubiquitiUser, self.ubiquitiPass)
+                self.ubiquitiSignalTracker.moveToThread(self.ubiquitiTrackerThread)
+                self.ubiquitiSignalTracker.start.connect(self.ubiquitiSignalTracker.run)
+                self.ubiquitiSignalTracker.setInterrupt.connect(self.ubiquitiSignalTracker.interrupt)
+                self.ubiquitiSignalTracker.start.emit()
+                self.ubiquitiSignalTrackStarted = True
+
+            else:
+                self.createWarning(
+                    'Ubiquiti Signal Tracking will not work when the Ubiquiti Modem is not connected')
+                self.autoUbiquitiSignalTrack.setChecked(False)
+                self.useUbiquitiSignalTrack = False
+                self.ubiquitiSignalTrackStarted = False
+
+        elif not self.useUbiquitiSignalTrack and self.ubiquitiSignalTrackStarted:  # Disable the tracking method
+            print("Ubiquiti Signal Tracking interrupted")
+            # self.interpolateIridium.setInterrupt.connect(self.interpolateIridium.interrupt)
+            self.ubiquitiSignalTracker.setInterrupt.emit()
+            self.ubiquitiSignalTrackStarted = False
+            #self.signalStrengthTime = np.array([])
+            #self.signalStrength = np.array([])
+            QCoreApplication.processEvents()  # Allow the thread to process events
+            #self.ubiquitiSignalStrengthLabel.setText("Current Strength: n/a")
+            #self.ubiquitiSignalStrengthLabel_graph.setText("n/a")
+
+##--------------------------------------------------------------------------------------------------------------------
+
+        if self.autoIridium.isChecked() or self.autoRFD.isChecked() or self.autoUbiquitiSignalTrack.isChecked():
             self.manualRefresh()
         else:
             self.autoDisabled.setChecked(True)
@@ -951,33 +1043,34 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 print(
                     "Error with Manual Angle Entry, make sure Bearing and Elevation Angle are entered")
 
-    def sliderControl(self, arg):
-        """ Control the sliders when you hit the button, or stop it if you hit the button again """
-
-        # When the start/stop button is clicked, toggle the state of the
-        # sliders
-        if arg == "click":
-            if not self.autotrackOnline:   # Only let this work if you're not in autotrack mode
-                if self.inSliderMode:				# If you're in slider mode, set the boolean to false, change the text back and get out
-                    self.inSliderMode = False
-                    self.sliderButton.setText("START")
-                    self.sliderStatus.setText("OFF")
-                    self.changeTextColor(self.sliderStatus, "red")
-                    return
-                elif not self.inSliderMode:		# if not in slider mode, change the boolean, text and text color
-                    print(self.inSliderMode)
-                    self.inSliderMode = True
-                    print(self.inSliderMode)
-                    self.sliderButton.setText("STOP")
-                    self.sliderStatus.setText("ON")
-                    self.changeTextColor(self.sliderStatus, "green")
-
-        # When a slider position is changed, move the position of the servos
-        if arg == "slide":
-            if self.inSliderMode:			# Only move if you're in slider mode
-                self.moveToTarget(self.panServoSlider.value(),
-                                  self.tiltServoSlider.value())
-                self.manualRefresh()			# Refresh the data tables
+    # Slider stuff commented out 6/19/2019
+    # def sliderControl(self, arg):
+    #     """ Control the sliders when you hit the button, or stop it if you hit the button again """
+    #
+    #     # When the start/stop button is clicked, toggle the state of the
+    #     # sliders
+    #     if arg == "click":
+    #         if not self.autotrackOnline:   # Only let this work if you're not in autotrack mode
+    #             if self.inSliderMode:				# If you're in slider mode, set the boolean to false, change the text back and get out
+    #                 self.inSliderMode = False
+    #                 self.sliderButton.setText("START")
+    #                 self.sliderStatus.setText("OFF")
+    #                 self.changeTextColor(self.sliderStatus, "red")
+    #                 return
+    #             elif not self.inSliderMode:		# if not in slider mode, change the boolean, text and text color
+    #                 print(self.inSliderMode)
+    #                 self.inSliderMode = True
+    #                 print(self.inSliderMode)
+    #                 self.sliderButton.setText("STOP")
+    #                 self.sliderStatus.setText("ON")
+    #                 self.changeTextColor(self.sliderStatus, "green")
+    #
+    #     # When a slider position is changed, move the position of the servos
+    #     if arg == "slide":
+    #         if self.inSliderMode:			# Only move if you're in slider mode
+    #             self.moveToTarget(self.panServoSlider.value(),
+    #                               self.tiltServoSlider.value())
+    #             self.manualRefresh()			# Refresh the data tables
 
     def trimControl(self, arg):
         """ Updates the trim values when the trim buttons are clicked, and move the tracking accordingly """
@@ -1455,6 +1548,36 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if each.hasMap() and each.inNewLocation():
                 each.updateMap()
 
+    def updateUbiquitiSignalStrength(self, strength):
+        """ Updates the signal strength indicators in the GUI and the signal strength graph on the Ubiquiti Tab"""
+        self.ubiquitiSignalStrengthLabel.setText("Current Strength: " + str(strength) + " dB")
+        self.ubiquitiSignalStrengthLabel_graph.setText(str(strength) + " dB")
+
+        # Update the Graphs in the Ubiquiti Tab
+        if self.graphReal.isChecked():  # Check to see if you have the graph checkbox selected
+            if (len(self.signalStrengthTime) >= 200):  # Restrict graph to most recent X number of points (to avoid lag)
+                self.signalStrengthTime = np.delete(self.signalStrengthTime, 0)
+                self.signalStrength = np.delete(self.signalStrength, 0)
+            self.signalStrengthTime = np.append(self.signalStrengthTime, time.time())
+            self.signalStrength = np.append(self.signalStrength, strength)
+
+            if len(self.signalStrengthTime) > 0:
+                # creates the subplot
+                plot = self.ubiFigure.add_subplot(111)
+                plot.cla()
+
+                # self.ubiGraphColor = self.ubiGraphColor + 1;  # Yay flashy colors
+                if self.ubiGraphColor >= len(self.ubiGraphColors):
+                    self.ubiGraphColor = 0
+                # plot data
+                plot.plot(self.signalStrengthTime -
+                          self.signalStrengthTime[len(self.signalStrengthTime) - 1], self.signalStrength,
+                          self.ubiGraphColors[self.ubiGraphColor])
+                plot.set_ylabel('Signal (dB)')
+                # refresh canvas
+                self.ubiCanvas.draw()
+                QCoreApplication.processEvents()  # Allow the thread to process events (an attempt to keep things smooth)
+
     def changeTextColor(self, obj, color):
         """ Changes the color of a text label to either red or green """
 
@@ -1582,7 +1705,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 arduinoCOM = eachLst[0].strip()
                 self.arduinoCOM.setText(arduinoCOM)
                 self.arduinoAttached.setChecked(True)
-                self.arduinoAttached.setChecked(True)
                 self.bearingNorth.setChecked(False)
                 ardCheck = True
 
@@ -1615,6 +1737,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.aprsAttached.setChecked(True)
                 aprsCheck = True
 
+
         # After checking all of the ports, you can see if a device has been
         # disconnected
         if not ardCheck:
@@ -1632,23 +1755,102 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 ##            self.aprsCOM.setText('')
 ##            self.aprsAttached.setChecked(False)
 
+        # Try to look for the ubiquiti modem
+        self.searchForUbiquiti()
+
+    def searchForUbiquiti(self):
+        """ Attempts to ping the Ubiquity modem, and if reached, starts scraping signal strength """
+        # Get the IP for the ubiquiti modem, default to placeholder
+        if self.ubiquitiCOM.text() == "":
+            self.ubiquitiIP = self.ubiquitiCOM.placeholderText()
+        else:
+            self.ubiquitiIP = self.ubiquitiCOM.text()
+        # Try to ping the ubiquiti modem
+        print("- - - Pinging ubiquiti modem - - -")
+        ret = os.system("ping -n 1 -w 1000 " + self.ubiquitiIP)
+        if ret == 0:
+            print("- - - Found ubiquiti modem - - -")
+            self.ubiquitiCOM.setText(self.ubiquitiIP)
+
+            # The ubiquiti modem has been found, now start scraping
+            if not self.ubiquitiSignalScraperStarted:  # Don't start it up again if it's already going
+                # Get the Username and Password for the ubiquiti modem, default to placeholder
+                if self.ubiUsername.text() == "":
+                    self.ubiquitiUser = self.ubiUsername.placeholderText()
+                else:
+                    self.ubiquitiUser = self.ubiUsername.text()
+                if self.ubiPassword.text() == "":
+                    self.ubiquitiPass = self.ubiPassword.placeholderText()
+                else:
+                    self.ubiquitiPass = self.ubiPassword.text()
+                print("Starting Ubiquiti Signal Scraping")
+                self.ubiquitiSignalScraper = UbiquitiSignalScraper(self, self.ubiquitiIP, self.ubiquitiUser,
+                                                                       self.ubiquitiPass)
+                self.ubiquitiSignalScraper.moveToThread(self.ubiquitiScraperThread)
+                self.ubiquitiSignalScraper.start.connect(self.ubiquitiSignalScraper.run)
+                self.ubiquitiSignalScraper.setInterrupt.connect(self.ubiquitiSignalScraper.interrupt)
+                self.ubiquitiSignalScraper.start.emit()
+                self.ubiquitiSignalScraperStarted = True
+                
+            self.ubiquitiAttached.setChecked(True)
+            
+        else:
+            print("- - - Ubiquiti modem not found- - -")
+            # Check if the scraper has been started. If so, stop the scraping thread
+            if self.ubiquitiSignalScraperStarted:
+                print("Ubiquiti Signal Scraping interrupted")
+                self.ubiquitiSignalScraper.setInterrupt.emit()
+                self.ubiquitiSignalScraperStarted = False
+                self.signalStrengthTime = np.array([])
+                self.signalStrength = np.array([])
+                QCoreApplication.processEvents()  # Allow the thread to process events
+                self.ubiquitiSignalStrengthLabel.setText("Current Strength: n/a")
+                self.ubiquitiSignalStrengthLabel_graph.setText("n/a")
+
+            self.ubiquitiAttached.setChecked(False)
+            
+    def handleUbiquitiScraperError(self, errcode: str):
+        if errcode == 'JSON Fetch':
+            print("Scraper JSON Fetch Error -- Most likely due to invalid login")
+            print("Turning scraper off, retry connection with new credentials.")
+            self.ubiquitiSignalScraper.setInterrupt.emit()
+            self.ubiquitiSignalScraperStarted = False
+            self.ubiquitiAttached.setChecked(False)
+            self.signalStrengthTime = np.array([])
+            self.signalStrength = np.array([])
+            QCoreApplication.processEvents()  # Allow the thread to process events
+            self.ubiquitiSignalStrengthLabel.setText("Current Strength: n/a")
+            self.ubiquitiSignalStrengthLabel_graph.setText("n/a")
+
+
     def disabledChecked(self):
         """ Makes sure that only the disabled autotrack option is checked """
-
         if self.autoDisabled.isChecked():
             self.autotrackBlock = True
-            self.autoIridium.setChecked(False)
             self.autoIridiumInterpolate.setChecked(False)
+            self.autoIridium.setChecked(False)
+            self.autoUbiquitiSignalTrack.setChecked(False)
 ##            self.autoAPRS.setChecked(False)
             self.autoRFD.setChecked(False)
         self.autotrackBlock = False
 
     def autotrackChecked(self):
         """ Makes sure that disabled isn't checked if there is an autotrack option checked """
+        if not self.autotrackBlock:
+            self.autoDisabled.setChecked(False)
 
-        if self.autoIridium.isChecked() or self.autoIridiumInterpolate.isChecked() or self.autoAPRS.isChecked() or self.autoRFD.isChecked():
-            if not self.autotrackBlock:
-                self.autoDisabled.setChecked(False)
+        if self.autoIridium.isChecked() or self.autoIridiumInterpolate.isChecked() or self.autoUbiquitiSignalTrack.isChecked() or self.autoRFD.isChecked():
+            #Only one tracking method may be used at a time
+            if (self.autoIridium.isChecked() and self.autoUbiquitiSignalTrack.isChecked())\
+                    or (self.autoIridium.isChecked() and self.autoRFD.isChecked())\
+                    or (self.autoUbiquitiSignalTrack.isChecked() and self.autoRFD.isChecked()):
+                self.createWarning("Only one tracking method may be used at one time.")
+                self.autoDisabled.setChecked(True)
+            #Iridium must be used with the interpolation, check that it is enabled
+            if not self.autoIridium.isChecked() and self.autoIridiumInterpolate.isChecked():
+                self.autoIridium.setChecked(True)
+
+
 
     def calibrateIMU(self):
         """ Display the calibration values for the IMU in a visible window,
