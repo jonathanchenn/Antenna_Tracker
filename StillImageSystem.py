@@ -41,7 +41,7 @@ class StillImageSystem(QtCore.QObject):
 
         # Variable to determine spacing of checksum. Ex. wordlength = 1000 will
         # send one thousand bits before calculating and verifying checksum
-        self.wordlength = 8000
+        self.wordlength = 1000
         self.extension = ".jpg"
         # The starting display photo is the logo of the MnSGC
         self.displayPhotoPath = "Images/MnSGC_Logo_highRes.png"
@@ -596,7 +596,7 @@ class StillImageSystem(QtCore.QObject):
 
             # CHECKSUM
             if checkours != checktheirs:
-                if trycnt < 10:		# This line sets the maximum number of checksum resends. Ex. trycnt = 5 will attempt to rereceive data 5 times before erroring out											  #I've found that the main cause of checksum errors is a bit drop or add desync, this adds a 2 second delay and resyncs both systems
+                if trycnt < 30:		# This line sets the maximum number of checksum resends. Ex. trycnt = 5 will attempt to rereceive data 5 times before erroring out											  #I've found that the main cause of checksum errors is a bit drop or add desync, this adds a 2 second delay and resyncs both systems
                     scount = 0
                     self.rfdSer.write(b'N')
                     trycnt += 1
