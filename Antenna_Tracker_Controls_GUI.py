@@ -1733,8 +1733,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.servoAttached.setChecked(True)
                     serCheck = True
 
-            # RFD 900 has vid 1027 and pid 24577
-            if each.vid == 1027 and each.pid == 24577:
+            # RFD 900 has vid 1027 and pid 24577, Feather LoRa Radios have vid 9114, pid 32779
+            if (each.vid == 1027 and each.pid == 24577) or (each.vid == 9114 and each.pid == 32779):
                 rfdCOM = each[0].strip()
                 self.rfdCOM.setText(rfdCOM)
                 self.rfdAttached.setChecked(True)
