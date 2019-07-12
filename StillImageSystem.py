@@ -73,7 +73,7 @@ class StillImageSystem(QtCore.QObject):
                 self.mainWindow.stillNewText.emit("Waiting for Acknowledge")
                 timeCheck = time.time() + 1
             sys.stdout.flush()
-            #self.rfdSer.write(b'1!') #probably breaks code dunno ? :/ uwu
+            self.rfdSer.write(b'1!') #probably breaks code dunno ? :/ uwu
 
         ### Make the file name by reading the radio ###
         sendfilename = ""
