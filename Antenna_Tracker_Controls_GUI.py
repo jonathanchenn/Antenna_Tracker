@@ -672,7 +672,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if not self.rfdStarted:
                 if not self.rfdCOM.text() == "":
                     rfdCOM = str(self.rfdCOM.text())
-                    self.RFD = SerialDevice(rfdCOM, 9600, 2)
+                    self.RFD = SerialDevice(rfdCOM, 57600, 0.5)
 
                     # Prepare the RFD Controls and the Still Image System
                     self.rfdListen = RfdListen(self, self.RFD.getDevice())

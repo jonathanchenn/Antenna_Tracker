@@ -575,7 +575,9 @@ class StillImageSystem(QtCore.QObject):
         except:
             print("Error retrieving picture size")
             self.mainWindow.stillNewText.emit("Error retrieving picture size")
-            stillPhotoMax = 1
+            ## stillPhotoMax = 1
+            print("Failed to receive picture")
+            return
 
         ### Retreive Data Loop (Will end when on timeout) ###
         while not done:
@@ -589,7 +591,12 @@ class StillImageSystem(QtCore.QObject):
             print(checktheirs)
             # Retreives characters, who's total string length is predetermined
             # by variable wordlength
-            word = self.rfdSer.read(wordlength)
+            word = ''
+            if stillPhotoMax - len(finalstring) < wordlength:
+                word = self.rfdSer.read(stillPhotoMax - len(finalstring))
+            else:
+                word = self.rfdSer.read(wordlength)
+            print("Word: ", word)
             # Retreives a checksum based on the received data strings
             checkours = self.gen_checksum(word).encode('ascii')
             print(checkours)
