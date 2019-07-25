@@ -18,7 +18,7 @@ import time as t
 from datetime import *
 import serial
 import serial.tools.list_ports
-import threading
+#import threading
 
 from PySide2 import QtCore, QtGui, QtWidgets
 from PySide2.QtWidgets import *
@@ -37,6 +37,11 @@ import geomag
 import base64					   # = encodes an image in b64 Strings (and decodes)
 import hashlib					  # = generates hashes
 
+# # Library for using SSH
+# import paramiko
+# from paramiko import client
+# from paramiko.client import *
+
 # Imports from files
 from ui_trackermain import Ui_MainWindow        # UI file import
 from ServoController import *			# Module for controlling Mini Maestro
@@ -47,10 +52,11 @@ from BalloonUpdate import *			# Class to hold balloon info
 from GetData import *				# Module for tracking methods
 from Payloads import *				# Module for handling payloads
 from MapHTML import *				# Module for generating Google Maps HTML and JavaScript
-from CommandEmailer import *                    # Module for emailing Iridium commands
-from Interpolate import *                       # Module for interpolating balloon pointing updates
-from UbiquitiSignalTracker import *             # Module for adjusting the antenna based on signal strength
-from UbiquitiSignalScraper import *             # Module for scraping the signal strength from the modem
+from CommandEmailer import *        # Module for emailing Iridium commands
+from Interpolate import *           # Module for interpolating balloon pointing updates
+from UbiquitiSignalTracker import * # Module for adjusting the antenna based on signal strength
+from UbiquitiSignalScraper import * # Module for scraping the signal strength from the modem
+from VLCStreamer import *           # Module for streaming via VLC
 
 # Matplotlib setup
 #matplotlib.use('Qt5Agg')
@@ -157,6 +163,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     # Data Signals
     noIridium = pyqtSignal()
 
+    #streamThread = None
+
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         # Uses the GUI built in QtCreator and interpreted using pyuic
@@ -184,6 +192,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.ubiquitiTrackerThread.daemon = True
         self.ubiquitiScraperThread = EventThread()
         self.ubiquitiScraperThread.daemon = True
+        self.VLCStreamerThread = EventThread()
+        self.VLCStreamerThread.daemon = True
         
         # Start the threads, they should run forever, and add them to the
         # thread pool
@@ -194,6 +204,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.iridiumInterpolateThread.start()
         self.ubiquitiTrackerThread.start()
         self.ubiquitiScraperThread.start()
+        self.VLCStreamerThread.start()
         self.aprsThread.start()
 
         # Button Function Link Setup
@@ -234,6 +245,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.getPiRuntimeDataButton.clicked.connect(
             self.getPiRuntimeDataButtonPress)
         self.requestStatusButton.clicked.connect(self.requestDeviceStatus)
+
+        # VLC Control Button Links
+        self.vlcStreamer = VLCStreamer() # Init the thread and object first
+        self.vlcStreamer.moveToThread(self.VLCStreamerThread)
+        self.vlcStreamer.start.connect(self.vlcStreamer.startVLCStream)
+        self.vlcStreamer.kill.connect(self.vlcStreamer.killVLCStream)
+        self.streamVLCButton.clicked.connect(self.vlcStreamer.start)
+        self.killVLCStreamButton.clicked.connect(self.vlcStreamer.kill)
 
         # Still Image Control Button Links
         self.mostRecentImageButton.clicked.connect(
@@ -609,7 +628,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.saveDataCheckbox.isChecked():
             if not self.saveData:
                 self.saveData = True
-                timestamp = str(datetime.today().strftime("%m-%d-%Y %H-%M-%S"))
+                timestamp = str(datetime.datetime.today().strftime("%m-%d-%Y %H-%M-%S"))
 
                 # Create the log files
                 if not os.path.exists("Logs/"):
@@ -1822,6 +1841,29 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.ubiquitiSignalStrengthLabel.setText("Current Strength: n/a")
             self.ubiquitiSignalStrengthLabel_graph.setText("n/a")
 
+    # def startVLCStream(self):
+    #     """ Executes the streaming command on the pi and then begins stream """
+    #     print("Connecting to streaming pi")
+    #     client = SSHClient()
+    #     client.set_missing_host_key_policy(AutoAddPolicy)
+    #     client.connect('192.168.1.69', port=22, username='pi', password='raspberry')
+    #     # If the pi is already streaming, will not start another streaming process
+    #     client.exec_command('if pgrep vlc; then echo "Streaming already started"; else ./vlcTest.sh; fi')
+    #     # Delay to allow the streaming to start
+    #     time.sleep(1)
+    #     # Attempt to start streaming
+    #     print("Starting VLC stream capture")
+    #     self.streamThread = threading.Thread(target=lambda: os.system('vlc.exe rtsp://' + '192.168.1.69' + ':8080/'))
+    #     self.streamThread.start()
+
+    # def killVLCStream(self):
+    #     """ Sends a command to the pi to kill streaming """
+    #     print("Connecting to streaming pi")
+    #     client = SSHClient()
+    #     client.set_missing_host_key_policy(AutoAddPolicy)
+    #     client.connect('192.168.1.69', port=22, username='pi', password='raspberry')
+    #     client.exec_command('pkill vlc')
+
 
     def disabledChecked(self):
         """ Makes sure that only the disabled autotrack option is checked """
@@ -1900,13 +1942,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 try:
                     # The arduino string is comma separated, and starts with ~
                     while temp_arduino[0] != '~':
-                        temp_arduino = s2.readline()
+                        temp_arduino = s2.readline().decode('utf-8')
                         #temp_arduino = bytes(temp_arduino, 'utf8')
-                        temp_arduino = temp_arduino.split(b',')
+                        temp_arduino = temp_arduino.split(',')
                         #displayStr = 'System: ' + temp_arduino[7] + '; ' + 'Gyro: ' + temp_arduino[
                         #    8] + '; ' + 'Accel: ' + temp_arduino[9] + '; ' + 'Mag: ' + temp_arduino[10]
-                        displayStr = 'System: ' + str(temp_arduino[7]) + '; ' + 'Gyro: ' + str(temp_arduino[
-                            8]) + '; ' + 'Accel: ' + str(temp_arduino[9]) + '; ' + 'Mag: ' + str(temp_arduino[10])
+                        displayStr = 'System: ' + temp_arduino[7] + '; ' + 'Gyro: ' + temp_arduino[
+                            8] + '; ' + 'Accel: ' + temp_arduino[9] + '; ' + 'Mag: ' + temp_arduino[10]
                         print(displayStr)
                         try:
                             self.calBrowser.append(displayStr)
@@ -2038,7 +2080,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     f = open(self.balloonLocationLog, 'a')
                 elif type == "pointing":
                     f = open(self.pointingLog, 'a')
-                f.write(str(datetime.today().strftime(
+                f.write(str(datetime.datetime.today().strftime(
                     "%m/%d/%Y %H:%M:%S")) + ',' + msg + '\n')
                 f.close()
             except:
@@ -2062,7 +2104,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         if self.servosAttached:
             try:
-                self.servoController.moveTiltServo(5970)
+                #self.servoController.moveTiltServo(5970)
+                #self.servoController.movePanServo(6000)
+                self.servoController.moveTiltServo(6024)
                 self.servoController.movePanServo(6000)
             except:
                 print("Error moving servos to center position")
@@ -2070,6 +2114,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Set the antenna bearing and elevation to the center position
             self.antennaBear = self.centerBear
             self.antennaEle = 0
+            # Reset trim settings
+            self.tiltOffset = 0
+            self.panOffset = 0
             self.manualRefresh()
 
         else:
@@ -2141,12 +2188,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Update the tilt mapping values here#
         tiltTo = int((tiltTo * 4.656 + 668) * 4)
 
-        if tiltTo > 6000:
-            tiltTo = 6000		# Don't go over the max
+        if tiltTo > 6300:
+            tiltTo = 6300		# Don't go over the max
         if tiltTo < 4348:
             tiltTo = 4348			# Don't go under the min
         # print tiltTo
-        if self.servosAttached:		# Move the servos to the new locations if they're attacheed
+        if self.servosAttached:		# Move the servos to the new locations if they're attached
             self.servoController.moveTiltServo(tiltTo)
         if temp != 0:
             self.centerBear = temp

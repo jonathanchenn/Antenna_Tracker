@@ -278,7 +278,7 @@
         <enum>QTabWidget::West</enum>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>7</number>
        </property>
        <widget class="QWidget" name="Settings">
         <attribute name="title">
@@ -436,7 +436,7 @@
                      </font>
                     </property>
                     <property name="placeholderText">
-                     <string>127</string>
+                     <string>127.6</string>
                     </property>
                    </widget>
                   </item>
@@ -1139,6 +1139,12 @@
         <layout class="QGridLayout" name="gridLayout_7">
          <item row="0" column="0">
           <widget class="QFrame" name="manualCoordinateEntryFrame">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="frameShape">
             <enum>QFrame::WinPanel</enum>
            </property>
@@ -1296,6 +1302,12 @@
          </item>
          <item row="0" column="1">
           <widget class="QFrame" name="manualAngleEntryFrame">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="frameShape">
             <enum>QFrame::WinPanel</enum>
            </property>
@@ -1531,6 +1543,12 @@
          </item>
          <item row="1" column="0" rowspan="2">
           <widget class="QFrame" name="ubiquityViewFrame">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="frameShape">
             <enum>QFrame::StyledPanel</enum>
            </property>
@@ -1545,6 +1563,12 @@
               <width>651</width>
               <height>411</height>
              </rect>
+            </property>
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
             </property>
             <property name="frameShape">
              <enum>QFrame::StyledPanel</enum>
@@ -1671,6 +1695,37 @@
           </widget>
          </item>
         </layout>
+       </widget>
+       <widget class="QWidget" name="UbiquitiVideo">
+        <attribute name="title">
+         <string>Ubiquiti Video</string>
+        </attribute>
+        <widget class="QPushButton" name="streamVLCButton">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>10</y>
+           <width>191</width>
+           <height>41</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Stream (via VLC)</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="killVLCStreamButton">
+         <property name="geometry">
+          <rect>
+           <x>210</x>
+           <y>20</y>
+           <width>75</width>
+           <height>23</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Kill Stream</string>
+         </property>
+        </widget>
        </widget>
        <widget class="QWidget" name="StillImages">
         <attribute name="title">
@@ -2324,6 +2379,53 @@
          </item>
         </layout>
        </widget>
+       <widget class="QWidget" name="Commands">
+        <attribute name="title">
+         <string>Commands</string>
+        </attribute>
+        <widget class="QPushButton" name="cutdownButton">
+         <property name="geometry">
+          <rect>
+           <x>134</x>
+           <y>82</y>
+           <width>111</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Send Cutdown</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="idleButton">
+         <property name="geometry">
+          <rect>
+           <x>260</x>
+           <y>80</y>
+           <width>111</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Send Idle</string>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QWidget" name="SunTable">
+        <attribute name="title">
+         <string>Sun Table</string>
+        </attribute>
+        <widget class="QWidget" name="gridLayoutWidget">
+         <property name="geometry">
+          <rect>
+           <x>9</x>
+           <y>9</y>
+           <width>1361</width>
+           <height>671</height>
+          </rect>
+         </property>
+         <layout class="QGridLayout" name="suntableViewGridLayout"/>
+        </widget>
+       </widget>
        <widget class="QWidget" name="RFDCommands">
         <property name="enabled">
          <bool>false</bool>
@@ -2711,53 +2813,6 @@
           </rect>
          </property>
          <layout class="QGridLayout" name="payloadTabGridLayout"/>
-        </widget>
-       </widget>
-       <widget class="QWidget" name="Commands">
-        <attribute name="title">
-         <string>Commands</string>
-        </attribute>
-        <widget class="QPushButton" name="cutdownButton">
-         <property name="geometry">
-          <rect>
-           <x>134</x>
-           <y>82</y>
-           <width>111</width>
-           <height>71</height>
-          </rect>
-         </property>
-         <property name="text">
-          <string>Send Cutdown</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="idleButton">
-         <property name="geometry">
-          <rect>
-           <x>260</x>
-           <y>80</y>
-           <width>111</width>
-           <height>71</height>
-          </rect>
-         </property>
-         <property name="text">
-          <string>Send Idle</string>
-         </property>
-        </widget>
-       </widget>
-       <widget class="QWidget" name="SunTable">
-        <attribute name="title">
-         <string>Sun Table</string>
-        </attribute>
-        <widget class="QWidget" name="gridLayoutWidget">
-         <property name="geometry">
-          <rect>
-           <x>9</x>
-           <y>9</y>
-           <width>1361</width>
-           <height>671</height>
-          </rect>
-         </property>
-         <layout class="QGridLayout" name="suntableViewGridLayout"/>
         </widget>
        </widget>
       </widget>

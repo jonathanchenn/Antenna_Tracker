@@ -31,7 +31,7 @@ class UbiquitiSignalScraper(QtCore.QObject):
 
         self.ip = IP
         # Start the scraper
-        scraper.begin('C://chromedriver.exe', self.ip, username=username, password=password)
+        scraper.begin('Drivers/chromedriver.exe', self.ip, username=username, password=password)
 
     def run(self):
         """ Scrapes signal strength from the modem and provides info to main window """
@@ -53,4 +53,3 @@ class UbiquitiSignalScraper(QtCore.QObject):
     def setUpdateSpeed(self, speed):
         self.updateSpeed = speed
         print("Set update speed to: " + str(self.updateSpeed))
-
