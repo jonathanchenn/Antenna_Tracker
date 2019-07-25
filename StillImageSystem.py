@@ -575,7 +575,7 @@ class StillImageSystem(QtCore.QObject):
         except:
             print("Error retrieving picture size")
             self.mainWindow.stillNewText.emit("Error retrieving picture size")
-            ## stillPhotoMax = 1
+            ##stillPhotoMax = 1
             print("Failed to receive picture")
             return
 
@@ -591,19 +591,26 @@ class StillImageSystem(QtCore.QObject):
             print(checktheirs)
             # Retreives characters, who's total string length is predetermined
             # by variable wordlength
+
+            #word = self.rfdSer.read(wordlength)
+            
             word = ''
             if stillPhotoMax - len(finalstring) < wordlength:
                 word = self.rfdSer.read(stillPhotoMax - len(finalstring))
+
             else:
                 word = self.rfdSer.read(wordlength)
+
+                
             print("Word: ", word)
+            #print("finalstring: ", finalstring)
             # Retreives a checksum based on the received data strings
             checkours = self.gen_checksum(word).encode('ascii')
             print(checkours)
 
             # CHECKSUM
             if checkours != checktheirs:
-                if trycnt < 30:		# This line sets the maximum number of checksum resends. Ex. trycnt = 5 will attempt to rereceive data 5 times before erroring out											  #I've found that the main cause of checksum errors is a bit drop or add desync, this adds a 2 second delay and resyncs both systems
+                if trycnt < 20:		# This line sets the maximum number of checksum resends. Ex. trycnt = 5 will attempt to rereceive data 5 times before erroring out											  #I've found that the main cause of checksum errors is a bit drop or add desync, this adds a 2 second delay and resyncs both systems
                     scount = 0
                     self.rfdSer.write(b'N')
                     trycnt += 1
@@ -649,6 +656,8 @@ class StillImageSystem(QtCore.QObject):
 ##                    self.sync()
             # The words always come in increments of some thousand, so if it's
             # not evenly divisible, you're probably at the end
+
+            #if len(word) % 1000 != 0:
             if len(finalstring) % 1000 != 0:
                 done = True
                 break
